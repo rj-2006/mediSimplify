@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>MediSimplify</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 12px 0; }
+  .warning { background: #fff4f4; border-color: #e5a; }
+  .flag { background: #fff8e5; border-color: #d9a; }
+  button { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; }
+  button:hover { background: #eaeaea; }
+  select, input[type=file] { margin: 6px 0; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  .conf-low { color: #b00; font-weight: 600; }
+  .conf-medium { color: #a60; font-weight: 600; }
+  .conf-high { color: #080; font-weight: 600; }
+  #status { color: #666; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <h1>MediSimplify</h1>
+  <p>Upload a photo of a prescription, lab report, or discharge summary — get a plain-language explanation read aloud to you.</p>
+
+  <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf" />
+  <button onclick="processFile()">Process document</button>
+  <p id="status"></p>
+
+  <div id="results" style="display:none;">
+    <div class="card">
+      <strong>Extraction confidence:</strong> <span id="confidence"></span>
+    </div>
+
+    <div class="card">
+      <h3>Summary</h3>
+      <p id="summary"></p>
+      <button onclick="speak('summary')">🔊 Read aloud</button>
+    </div>
+
+    <div class="card">
+      <h3>What this means for you</h3>
+      <p id="meaning"></p>
+      <button onclick="speak('meaning')">🔊 Read aloud</button>
+    </div>
+
+    <div class="card">
+      <h3>Action checklist</h3>
+      <ul id="checklist"></ul>
+    </div>
+
+    <div class="card warning">
+      <h3>⚠ Warning signs — contact a doctor if you notice these</h3>
+      <ul id="warnings"></ul>
+    </div>
+
+    <div class="card flag" id="flagsCard" style="display:none;">
+      <h3>Please double-check with your pharmacist/doctor</h3>
+      <ul id="flags"></ul>
+    </div>
+
+    <p style="font-size:0.85rem; color:#666;" id="disclaimer"></p>
+
+    <div class="card">
+      <h3>Translate</h3>
+      <select id="langSelect">
+        <option value="Hindi">Hindi</option>
+        <option value="Spanish">Spanish</option>
+        <option value="Bengali">Bengali</option>
+        <option value="Tamil">Tamil</option>
+        <option value="French">French</option>
+      </select>
+      <button onclick="translate()">Translate</button>
+    </div>
+  </div>
+
+<script>
+const API_BASE = "http://localhost:8000";
+let lastStructured = null;
+
+async function processFile() {
+  const fileInput = document.getElementById("fileInput");
+  const status = document.getElementById("status");
+  if (!fileInput.files.length) {
+    status.textContent = "Choose a file first.";
+    return;
+  }
+  status.textContent = "Processing... (OCR + vision extraction + cross-check can take ~10-20s)";
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  try {
+    const res = await fetch(`${API_BASE}/process`, { method: "POST", body: formData });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    renderResult(data);
+    status.textContent = "Done.";
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
+  }
+}
+
+function renderResult(data) {
+  lastStructured = data.structured;
+  document.getElementById("results").style.display = "block";
+
+  const conf = data.ocr.overall_confidence;
+  const confEl = document.getElementById("confidence");
+  confEl.textContent = conf.toUpperCase();
+  confEl.className = "conf-" + conf;
+
+  document.getElementById("summary").textContent = data.structured.plain_summary;
+  document.getElementById("meaning").textContent = data.structured.what_it_means_for_you;
+
+  const checklist = document.getElementById("checklist");
+  checklist.innerHTML = "";
+  data.structured.action_checklist.forEach(item => {
+    const li = document.createElement("li");
+    li.textContent = item.text;
+    checklist.appendChild(li);
+  });
+
+  const warnings = document.getElementById("warnings");
+  warnings.innerHTML = "";
+  data.structured.warning_signs.forEach(w => {
+    const li = document.createElement("li");
+    li.textContent = w;
+    warnings.appendChild(li);
+  });
+
+  const flagsCard = document.getElementById("flagsCard");
+  const flags = document.getElementById("flags");
+  flags.innerHTML = "";
+  if (data.structured.low_confidence_flags.length) {
+    flagsCard.style.display = "block";
+    data.structured.low_confidence_flags.forEach(f => {
+      const li = document.createElement("li");
+      li.textContent = f;
+      flags.appendChild(li);
+    });
+  } else {
+    flagsCard.style.display = "none";
+  }
+
+  document.getElementById("disclaimer").textContent = data.structured.disclaimer;
+}
+
+function speak(elementId) {
+  const text = document.getElementById(elementId).textContent;
+  const utter = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utter);
+}
+
+async function translate() {
+  if (!lastStructured) return;
+  const lang = document.getElementById("langSelect").value;
+  const status = document.getElementById("status");
+  status.textContent = "Translating...";
+  try {
+    const res = await fetch(`${API_BASE}/translate-structured?target_language=${encodeURIComponent(lang)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lastStructured),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const translated = await res.json();
+    renderResult({ ocr: { overall_confidence: document.getElementById("confidence").textContent.toLowerCase() }, structured: translated });
+    status.textContent = "Translated to " + lang + ".";
+  } catch (err) {
+    status.textContent = "Translate error: " + err.message;
+  }
+}
+</script>
+</body>
+</html>
