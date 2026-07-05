@@ -184,32 +184,70 @@ Service health check endpoint for monitoring and uptime verification.
    - **macOS:** `brew install poppler`
    - **Linux:** `sudo apt-get install poppler-utils`
 
-### Step-by-Step Guide
+---
 
-```powershell
-# 1. Clone the repository and navigate to the directory
-git clone https://github.com/your-username/MediSimplify.git
+### 🐍 Virtual Environment Guide & Troubleshooting (`ModuleNotFoundError`)
+
+> [!WARNING]
+> **Why use a Virtual Environment?** If you type `python` directly in your terminal without activating your virtual environment, your operating system will execute your **global system Python** (e.g., `C:\Python314\python.exe`). Because project dependencies like `openai`, `fastapi`, and `paddleocr` are installed inside the virtual environment (`venv`), running global Python will cause errors like:
+> `ModuleNotFoundError: No module named 'openai'` or `No module named 'fastapi'`
+
+To ensure you are using the correct isolated environment, follow these instructions based on your operating system:
+
+#### 1. Windows (PowerShell / Command Prompt)
+You have two reliable ways to run the server on Windows:
+
+- **Option A: Activate the environment first (Recommended)**
+  ```powershell
+  # 1. Clone the repository and navigate to the directory
+  git clone https://github.com/rj-2006/mediSimplify.git
+  cd MediSimplify
+
+  # 2. Create virtual environment
+  python -m venv venv
+
+  # 3. Activate virtual environment (Look for (venv) in your prompt!)
+  .\venv\Scripts\activate
+
+  # 4. Install dependencies & configure .env
+  pip install -r requirements.txt
+  cp .env.example .env
+
+  # 5. Launch development server
+  python -m uvicorn app.main:app --reload --port 8000
+  ```
+
+- **Option B: Execute directly via virtual environment binary (No activation needed)**
+  If your PowerShell execution policy blocks `activate.ps1` or you want a quick one-liner without activating:
+  ```powershell
+  .\venv\Scripts\pip.exe install -r requirements.txt
+  .\venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+  ```
+
+#### 2. macOS & Linux (Bash / Zsh)
+```bash
+# 1. Clone repository & create virtual environment
+git clone https://github.com/rj-2006/mediSimplify.git
 cd MediSimplify
+python3 -m venv venv
 
-# 2. Create and activate a Python 3.11 virtual environment
-py -3.11 -m venv venv
-.\venv\Scripts\Activate.ps1
+# 2. Activate virtual environment
+source venv/bin/activate
 
-# 3. Install required Python dependencies
+# 3. Install dependencies & launch server
 pip install -r requirements.txt
-
-# 4. Configure environment variables
-# Copy template and insert your API key in .env
 cp .env.example .env
-
-# 5. Launch the Uvicorn development server
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
+---
+
+### Accessing the Platform
 Once the server is running, access the platform:
 - **Interactive Gruvbox UI Dashboard:** [http://localhost:8000/ui](http://localhost:8000/ui)
 - **FastAPI Interactive Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Check Endpoint:** [http://localhost:8000/health](http://localhost:8000/health)
+
 
 ---
 
