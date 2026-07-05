@@ -9,7 +9,7 @@ import tempfile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.cross_check import cross_check
@@ -38,6 +38,11 @@ _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(_static_dir):
     app.mount("/ui", StaticFiles(directory=_static_dir, html=True), name="static")
 
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect the root URL to the frontend."""
+    return RedirectResponse(url="/ui")
 
 @app.post("/process", response_model=PipelineResponse)
 async def process_document(file: UploadFile = File(...)):
