@@ -38,7 +38,7 @@ lib64/
 tmp/
 temp/
 
-# IDE & OS files
+# IDE, OS & Agent generated files
 .vscode/
 .idea/
 *.swp
@@ -46,3 +46,6 @@ temp/
 *~
 .DS_Store
 Thumbs.db
+.system_generated/
+.gemini/
+.agents/

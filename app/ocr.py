@@ -1,43 +1,30 @@
 """
-PaddleOCR extraction path.
-
-This is the "dedicated OCR model" side of the dual-extraction cross-check.
-It's fast, local, deterministic, and generally strong on printed text and
-tabular lab-report layouts. It's weak on handwriting -- that's what the
-vision LLM path (vision_extract.py) is for.
+PaddleOCR text extraction engine and PDF rasterization utilities.
+Provides deterministic local OCR capabilities for printed text and tables.
 """
+import tempfile
 from functools import lru_cache
-from typing import List, Tuple
+from typing import List
 
 from app.models import OCRResult
 
 
 @lru_cache(maxsize=1)
 def _get_paddle_engine():
-    # Lazy import + cache: PaddleOCR is slow to initialize (loads model
-    # weights), so we only want to pay that cost once per process, not
-    # once per request.
+    """Lazy initialization and caching of the PaddleOCR inference engine."""
     from paddleocr import PaddleOCR
 
     return PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
 
 
 def run_paddle_ocr(image_path: str) -> OCRResult:
-    """Run PaddleOCR on a single image and return concatenated text plus
-    an averaged confidence score.
-
-    PaddleOCR 2.x returns results per detected text line as:
-        [[box_points], (text, confidence)]
-    We just need the text (in reading order, top-to-bottom) and an
-    average confidence to inform the cross-check step.
-    """
+    """Executes PaddleOCR on the target image and returns concatenated text with average confidence."""
     engine = _get_paddle_engine()
     result = engine.ocr(image_path, cls=True)
 
     lines: List[str] = []
     confidences: List[float] = []
 
-    # result is a list (one per image) of lists of detections
     for page in result:
         if not page:
             continue
@@ -52,21 +39,14 @@ def run_paddle_ocr(image_path: str) -> OCRResult:
     return OCRResult(source="paddleocr", raw_text=raw_text, confidence=avg_conf)
 
 
-
-
 def prepare_image_for_ocr(input_path: str) -> str:
-    """If given a PDF, rasterize ALL pages and stitch them vertically into
-    a single temp PNG. Multi-page discharge summaries were previously
-    silently truncated at page 1 -- this fixes that.
-    If already an image, return as-is."""
+    """Rasterizes multi-page PDF documents into a single stitched PNG image for full pipeline extraction."""
     if input_path.lower().endswith(".pdf"):
         from pdf2image import convert_from_path
-        import tempfile
         from PIL import Image
 
         pages = convert_from_path(input_path, dpi=300)
         if len(pages) > 1:
-            # Stitch all pages vertically so OCR + vision see the full doc.
             total_height = sum(p.height for p in pages)
             max_width = max(p.width for p in pages)
             combined = Image.new("RGB", (max_width, total_height), color=(255, 255, 255))
